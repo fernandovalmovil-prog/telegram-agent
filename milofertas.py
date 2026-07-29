@@ -1,4 +1,4 @@
-#!/usr/init/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import requests
@@ -283,28 +283,29 @@ def main():
     historial = set(cargar_json(HISTORIAL_FILE, []))
     log(f"Sistema iniciado | MODO={MODO} | Historial cargado con {len(historial)} elementos.")
 
-    while True:
-        if not horario_permitido() or not evaluar_riesgo():
-            log("Pausando ejecución por restricciones de horario o límites de riesgo. Reintentando en 10 minutos...")
-            time.sleep(600)
-            continue
+    # Verificamos restricciones una sola vez
+    if not horario_permitido():
+        log("Fuera de horario permitido. Finalizando ejecución.")
+        return
 
-        urls = buscar_productos()
+    if not evaluar_riesgo():
+        log("Límite de riesgo diario alcanzado. Finalizando ejecución.")
+        return
 
-        enviado_este_ciclo = False
-        for url in urls:
-            p = obtener_producto(url, historial)
-            if p:
-                enviar_telegram(p)
-                enviado_este_ciclo = True
-                break
+    urls = buscar_productos()
+    enviado = False
 
-        if not enviado_este_ciclo:
-            log("No se encontró ningún producto válido para enviar en este ciclo.")
+    for url in urls:
+        p = obtener_producto(url, historial)
+        if p:
+            enviar_telegram(p)
+            enviado = True
+            break  # Se envía una oferta válida y se concluye el ciclo
 
-        espera = random.randint(CFG["min_intervalo"], CFG["max_intervalo"])
-        log(f"Ciclo finalizado. Esperando {espera // 60} minutos ({espera} segundos) para el siguiente ciclo.\n" + "-"*50)
-        time.sleep(espera)
+    if not enviado:
+        log("No se encontró ningún producto válido para enviar en este ciclo.")
+
+    log("Ejecución finalizada con éxito.")
 
 if __name__ == "__main__":
     main()
