@@ -74,7 +74,8 @@ CHAT_ID = "@Milofertazos"
 # ==================================================
 
 def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+    # flush=True asegura que los prints se muestren al momento en GitHub Actions
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
 
 def horario_permitido():
     h = datetime.now().hour
@@ -283,10 +284,10 @@ def main():
     historial = set(cargar_json(HISTORIAL_FILE, []))
     log(f"Sistema iniciado | MODO={MODO} | Historial cargado con {len(historial)} elementos.")
 
-    # Verificamos restricciones una sola vez
-    if not horario_permitido():
-        log("Fuera de horario permitido. Finalizando ejecución.")
-        return
+    # Validación de horario comentada temporalmente para pruebas
+    # if not horario_permitido():
+    #     log("Fuera de horario permitido. Finalizando ejecución.")
+    #     return
 
     if not evaluar_riesgo():
         log("Límite de riesgo diario alcanzado. Finalizando ejecución.")
@@ -300,7 +301,7 @@ def main():
         if p:
             enviar_telegram(p)
             enviado = True
-            break  # Se envía una oferta válida y se concluye el ciclo
+            break
 
     if not enviado:
         log("No se encontró ningún producto válido para enviar en este ciclo.")
