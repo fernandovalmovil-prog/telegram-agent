@@ -1,5 +1,4 @@
-
-#!/usr/bin/env python3
+#!/usr/init/env python3
 # -*- coding: utf-8 -*-
 
 import requests
@@ -79,20 +78,31 @@ def log(msg):
 
 def horario_permitido():
     h = datetime.now().hour
-    return HORA_INICIO <= h < HORA_FIN
+    permitido = HORA_INICIO <= h < HORA_FIN
+    if not permitido:
+        log(f"Fuera de horario permitido ({h}h). Horario activo: {HORA_INICIO}h - {HORA_FIN}h")
+    return permitido
 
 def cargar_json(path, default):
     if not os.path.exists(path):
+        log(f"Archivo JSON no encontrado en {path}, usando valor por defecto.")
         return default
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
+            data = json.load(f)
+            log(f"JSON cargado exitosamente desde {path}")
+            return data
+    except Exception as e:
+        log(f"Error al cargar JSON {path}: {e}. Usando valor por defecto.")
         return default
 
 def guardar_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        log(f"JSON guardado correctamente en {path}")
+    except Exception as e:
+        log(f"Error al guardar JSON en {path}: {e}")
 
 # ==================================================
 # ============ CONTROL DE RIESGO ===================
@@ -102,6 +112,7 @@ def evaluar_riesgo():
     envios = cargar_json(ENVIO_DIARIO_FILE, {})
     hoy = datetime.now().strftime("%Y-%m-%d")
     enviados_hoy = envios.get(hoy, 0)
+    log(f"Envíos realizados hoy ({hoy}): {enviados_hoy}/{CFG['max_envios_dia']}")
 
     if enviados_hoy >= CFG["max_envios_dia"]:
         log("RIESGO: límite diario alcanzado → pausa")
@@ -114,6 +125,7 @@ def registrar_envio():
     hoy = datetime.now().strftime("%Y-%m-%d")
     envios[hoy] = envios.get(hoy, 0) + 1
     guardar_json(ENVIO_DIARIO_FILE, envios)
+    log(f"Envío registrado. Total hoy: {envios[hoy]}")
 
 # ==================================================
 # ============== AMAZON ============================
@@ -128,10 +140,15 @@ def crear_url(asin):
 
 def get_html(url):
     try:
-        time.sleep(random.uniform(1.5, 3))
-        r = requests.get(url, headers=random.choice(HEADERS), timeout=20)
+        espera = random.uniform(1.5, 3)
+        time.sleep(espera)
+        header_elegido = random.choice(HEADERS)
+        log(f"Realizando petición HTTP a: {url}")
+        r = requests.get(url, headers=header_elegido, timeout=20)
+        log(f"Respuesta HTTP recibida con estatus: {r.status_code}")
         return r.text if r.status_code == 200 else None
-    except:
+    except Exception as e:
+        log(f"Excepción en get_html para {url}: {e}")
         return None
 
 def parse_precio(txt):
@@ -165,18 +182,33 @@ def generar_mensaje(p):
 
 def enviar_telegram(p):
     try:
-        img = requests.get(p["imagen"], timeout=20).content
+        log(f"Iniciando descarga de imagen para ASIN {p['asin']} desde: {p['imagen']}")
+        img_resp = requests.get(p["imagen"], timeout=20)
+        if img_resp.status_code != 200:
+            log(f"Error al descargar imagen. Código HTTP: {img_resp.status_code}")
+            return
+        
+        img = img_resp.content
+        log(f"Imagen descargada con éxito. Enviando mensaje a Telegram (Chat ID: {CHAT_ID})...")
+        
+        caption_texto = generar_mensaje(p)
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
-            data={"chat_id": CHAT_ID, "caption": generar_mensaje(p)},
+            data={"chat_id": CHAT_ID, "caption": caption_texto},
             files={"photo": ("img.jpg", img)},
             timeout=30
         )
+        
+        log(f"Respuesta de la API de Telegram - Status Code: {r.status_code}")
+        log(f"Cuerpo de respuesta Telegram: {r.text}")
+
         if r.status_code == 200:
             registrar_envio()
-            log(f"Enviado ASIN {p['asin']}")
+            log(f"¡Enviado con éxito a Telegram! ASIN: {p['asin']}")
+        else:
+            log(f"Telegram rechazó el mensaje. Código: {r.status_code}")
     except Exception as e:
-        log(f"Telegram error: {e}")
+        log(f"Excepción crítica en enviar_telegram: {e}")
 
 # ==================================================
 # ============== BUSQUEDA ==========================
@@ -184,33 +216,47 @@ def enviar_telegram(p):
 
 def buscar_productos():
     palabra = random.choice(PALABRAS_CLAVE)
+    log(f"Buscando productos en Amazon usando la palabra clave: '{palabra}'")
     urls = set()
 
     for page in range(1, 4):
-        html = get_html(f"https://www.amazon.es/s?k={palabra}&page={page}")
+        url_busqueda = f"https://www.amazon.es/s?k={palabra}&page={page}"
+        html = get_html(url_busqueda)
         if not html:
+            log(f"No se pudo obtener HTML para la página {page} de la búsqueda.")
             continue
         soup = BeautifulSoup(html, "html.parser")
+        encontrados_pagina = 0
         for a in soup.select("a[href*='/dp/']"):
             asin = extract_asin(a.get("href", ""))
             if asin:
                 urls.add(f"https://www.amazon.es/dp/{asin}")
+                encontrados_pagina += 1
+        log(f"Página {page}: Encontrados {encontrados_pagina} enlaces de productos.")
 
+    log(f"Total de URLs únicas recolectadas en esta búsqueda: {len(urls)}")
     return list(urls)
 
 def obtener_producto(url, historial):
     asin = extract_asin(url)
-    if not asin or asin in historial:
+    if not asin:
+        return None
+    if asin in historial:
+        log(f"ASIN {asin} ya se encuentra en el historial. Saltando.")
         return None
 
+    log(f"Analizando producto con ASIN: {asin}")
     html = get_html(url)
     if not html:
+        log(f"No se pudo obtener el HTML del producto ASIN {asin}")
         return None
 
     soup = BeautifulSoup(html, "html.parser")
     precio, _, desc = extraer_precios(soup)
+    log(f"ASIN {asin} -> Precio: {precio} € | Descuento detectado: {desc}% (Mínimo requerido: {CFG['min_descuento']}%)")
 
     if not precio or desc < CFG["min_descuento"]:
+        log(f"Producto descartado (Precio nulo o descuento inferior al mínimo).")
         return None
 
     titulo = soup.select_one("#productTitle")
@@ -219,13 +265,15 @@ def obtener_producto(url, historial):
     historial.add(asin)
     guardar_json(HISTORIAL_FILE, list(historial))
 
-    return {
+    prod_data = {
         "asin": asin,
         "titulo": titulo.text.strip() if titulo else "Producto Amazon",
         "precio": precio,
         "imagen": imagen["src"] if imagen else None,
         "url": crear_url(asin)
     }
+    log(f"Producto válido encontrado: {prod_data['titulo'][:40]}... (ASIN: {asin})")
+    return prod_data
 
 # ==================================================
 # ================= MAIN ===========================
@@ -233,23 +281,29 @@ def obtener_producto(url, historial):
 
 def main():
     historial = set(cargar_json(HISTORIAL_FILE, []))
-    log(f"Sistema iniciado | MODO={MODO}")
+    log(f"Sistema iniciado | MODO={MODO} | Historial cargado con {len(historial)} elementos.")
 
     while True:
         if not horario_permitido() or not evaluar_riesgo():
+            log("Pausando ejecución por restricciones de horario o límites de riesgo. Reintentando en 10 minutos...")
             time.sleep(600)
             continue
 
         urls = buscar_productos()
 
+        enviado_este_ciclo = False
         for url in urls:
             p = obtener_producto(url, historial)
             if p:
                 enviar_telegram(p)
+                enviado_este_ciclo = True
                 break
 
+        if not enviado_este_ciclo:
+            log("No se encontró ningún producto válido para enviar en este ciclo.")
+
         espera = random.randint(CFG["min_intervalo"], CFG["max_intervalo"])
-        log(f"Esperando {espera // 60} minutos")
+        log(f"Ciclo finalizado. Esperando {espera // 60} minutos ({espera} segundos) para el siguiente ciclo.\n" + "-"*50)
         time.sleep(espera)
 
 if __name__ == "__main__":
