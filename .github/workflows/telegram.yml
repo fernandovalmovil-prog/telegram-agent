@@ -2,34 +2,27 @@ name: Telegram Agent
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"
 
 jobs:
   run-agent:
-    *uns-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
-*     - name: Descargar repositorio*        uses: actions/checkout@v4
-*      - name: Instalar Python
-    *   uses: actions/setup-python@v5
- *      with:
-          python-versi*n: "3.11"
+      - uses: actions/checkout@v4
 
-      - name: Comprobar*archivos del repositorio
-        r*n: |
-          echo "Carpeta actua*:"
-          pwd
-          echo "A*chivos disponibles:"
-          ls *la
+      - name: Mostrar carpeta actual
+        run: pwd
 
-      - name: Instalar depende*cias
-        run: |
-          pyth*n -m pip install --upgrade pip
-   *      pip install -r requirements.*xt
+      - name: Listar todos los archivos
+        run: find . -type f
 
-      - name: Ejecutar agente
-*       env:
-          TELEGRAM_BOT*TOKEN: ${{ secrets.TELEGRAM_BOT_TO*EN }}
-          TELEGRAM_CHAT_ID: *{{ secrets.TELEGRAM_CHAT_ID }}
-   *    run: python milofertas.py
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar script
+        run: python milofertas.py
