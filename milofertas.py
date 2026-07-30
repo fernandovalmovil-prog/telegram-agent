@@ -52,9 +52,14 @@ PALABRAS_CLAVE = [
 ]
 
 HEADERS = [
-    {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120"},
-    {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0"},
-    {"User-Agent": "Mozilla/5.0 (Macintosh) Safari/605.1.15"},
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
 ]
 
 TAG_AFILIADO = "crt06f-21"
