@@ -3,7 +3,7 @@
 
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import re
 import os
 import json
@@ -131,7 +131,7 @@ def crear_url(asin):
     return f"https://www.amazon.es/dp/{asin}?tag={TAG_AFILIADO}"
 
 def get_page_html(url):
-    """Obtiene el HTML completo de una URL usando Playwright con bypass anti-bot avanzado."""
+    """Obtiene el HTML completo usando Playwright con bypass anti-bot avanzado."""
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -145,7 +145,6 @@ def get_page_html(url):
             ]
         )
         
-        # Crear un contexto imitando un navegador real de escritorio
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
             locale="es-ES",
@@ -157,8 +156,6 @@ def get_page_html(url):
         )
         
         page = context.new_page()
-        
-        # Ocultar la propiedad navigator.webdriver para evitar detección de bots
         page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
         try:
@@ -168,7 +165,6 @@ def get_page_html(url):
             
             page.goto(url, timeout=60000, wait_until="domcontentloaded")
             
-            # Esperar a que aparezcan los resultados de búsqueda o el contenedor principal de Amazon
             try:
                 page.wait_for_selector("div.s-main-slot, #productTitle", timeout=10000)
             except:
@@ -238,7 +234,7 @@ def enviar_telegram(p):
 
         if r.status_code == 200:
             registrar_envio()
-            log(f"¡Enviado con éxito à Telegram! ASIN: {p['asin']}")
+            log(f"¡Enviado con éxito a Telegram! ASIN: {p['asin']}")
         else:
             log(f"Telegram rechazó el mensaje. Código: {r.status_code}")
     except Exception as e:
