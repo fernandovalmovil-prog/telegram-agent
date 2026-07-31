@@ -151,29 +151,22 @@ def get_page_html(url):
         )
         
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="es-ES",
             timezone_id="Europe/Madrid",
             viewport={"width": 1920, "height": 1080},
-            device_scale_factor=1,
-            is_mobile=False,
-            has_touch=False
         )
         
         page = context.new_page()
         page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
         try:
-            espera = random.uniform(2.0, 4.0)
+            espera = random.uniform(3.0, 5.0)
             time.sleep(espera)
             log(f"Navegando con Playwright a: {url}")
             
-            page.goto(url, timeout=60000, wait_until="domcontentloaded")
-            
-            try:
-                page.wait_for_selector("div.s-main-slot, #productTitle", timeout=10000)
-            except:
-                log("Aviso: No se detectó el selector principal de forma inmediata, continuando...")
+            page.goto(url, timeout=60000, wait_until="load")
+            time.sleep(3)
                 
             html_content = page.content()
             browser.close()
@@ -254,7 +247,7 @@ def buscar_productos():
     log(f"Buscando productos en Amazon usando la palabra clave: '{palabra}'")
     urls = set()
 
-    for page in range(1, 3):  # Reducimos a 2 páginas para agilizar y evitar bloqueos por tiempo
+    for page in range(1, 3):
         url_busqueda = f"https://www.amazon.es/s?k={palabra}&page={page}"
         html = get_page_html(url_busqueda)
         if not html:
@@ -264,20 +257,14 @@ def buscar_productos():
         soup = BeautifulSoup(html, "html.parser")
         encontrados_pagina = 0
         
-        # Buscamos directamente los contenedores de los productos de Amazon
-        items = soup.select('div[data-component-type="s-search-result"]')
-        
-        for item in items:
-            # Extraemos el enlace del título o de la imagen dentro del producto
-            a_tag = item.select_one("h2 a, a.a-link-normal.s-no-outline")
-            if a_tag and a_tag.get("href"):
-                href = a_tag.get("href")
-                asin = extract_asin(href)
-                if asin:
-                    urls.add(f"https://www.amazon.es/dp/{asin}")
-                    encontrados_pagina += 1
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            asin = extract_asin(href)
+            if asin:
+                urls.add(f"https://www.amazon.es/dp/{asin}")
+                encontrados_pagina += 1
                     
-        log(f"Página {page}: Encontrados {encontrados_pagina} enlaces válidos de productos.")
+        log(f"Página {page}: Encontrados {encontrados_pagina} enlaces de productos.")
 
     log(f"Total de URLs únicas recolectadas en esta búsqueda: {len(urls)}")
     return list(urls)
