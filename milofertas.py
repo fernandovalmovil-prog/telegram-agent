@@ -21,19 +21,19 @@ MODOS_CONFIG = {
     "ULTRA": {
         "min_intervalo": 3600,     # 1h
         "max_intervalo": 7200,     # 2h
-        "min_descuento": 7,
+        "min_descuento": 5,
         "max_envios_dia": 10
     },
     "SAFE": {
         "min_intervalo": 2700,     # 45 min
         "max_intervalo": 5400,     # 90 min
-        "min_descuento": 5,
+        "min_descuento": 3,
         "max_envios_dia": 20
     },
     "NORMAL": {
         "min_intervalo": 1800,     # 30 min
         "max_intervalo": 3600,     # 60 min
-        "min_descuento": 3,
+        "min_descuento": 1,
         "max_envios_dia": 35
     }
 }
