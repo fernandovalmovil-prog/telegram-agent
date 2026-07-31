@@ -254,20 +254,30 @@ def buscar_productos():
     log(f"Buscando productos en Amazon usando la palabra clave: '{palabra}'")
     urls = set()
 
-    for page in range(1, 4):
+    for page in range(1, 3):  # Reducimos a 2 páginas para agilizar y evitar bloqueos por tiempo
         url_busqueda = f"https://www.amazon.es/s?k={palabra}&page={page}"
         html = get_page_html(url_busqueda)
         if not html:
             log(f"No se pudo obtener HTML para la página {page} de la búsqueda.")
             continue
+        
         soup = BeautifulSoup(html, "html.parser")
         encontrados_pagina = 0
-        for a in soup.select("a[href*='/dp/']"):
-            asin = extract_asin(a.get("href", ""))
-            if asin:
-                urls.add(f"https://www.amazon.es/dp/{asin}")
-                encontrados_pagina += 1
-        log(f"Página {page}: Encontrados {encontrados_pagina} enlaces de productos.")
+        
+        # Buscamos directamente los contenedores de los productos de Amazon
+        items = soup.select('div[data-component-type="s-search-result"]')
+        
+        for item in items:
+            # Extraemos el enlace del título o de la imagen dentro del producto
+            a_tag = item.select_one("h2 a, a.a-link-normal.s-no-outline")
+            if a_tag and a_tag.get("href"):
+                href = a_tag.get("href")
+                asin = extract_asin(href)
+                if asin:
+                    urls.add(f"https://www.amazon.es/dp/{asin}")
+                    encontrados_pagina += 1
+                    
+        log(f"Página {page}: Encontrados {encontrados_pagina} enlaces válidos de productos.")
 
     log(f"Total de URLs únicas recolectadas en esta búsqueda: {len(urls)}")
     return list(urls)
