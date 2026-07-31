@@ -131,36 +131,49 @@ def crear_url(asin):
     return f"https://www.amazon.es/dp/{asin}?tag={TAG_AFILIADO}"
 
 def get_page_html(url):
-    """Obtiene el HTML completo de una URL usando Playwright en modo headless."""
+    """Obtiene el HTML completo de una URL usando Playwright con bypass anti-bot avanzado."""
     with sync_playwright() as p:
-        # Se lanza Chromium en modo headless con argumentos optimizados para CI/CD (GitHub Actions)
         browser = p.chromium.launch(
             headless=True,
             args=[
                 "--disable-gpu",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled"
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--window-size=1920,1080",
             ]
         )
+        
+        # Crear un contexto imitando un navegador real de escritorio
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
             locale="es-ES",
-            viewport={"width": 1920, "height": 1080}
+            timezone_id="Europe/Madrid",
+            viewport={"width": 1920, "height": 1080},
+            device_scale_factor=1,
+            is_mobile=False,
+            has_touch=False
         )
+        
         page = context.new_page()
         
+        # Ocultar la propiedad navigator.webdriver para evitar detección de bots
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
         try:
-            espera = random.uniform(1.5, 3.0)
+            espera = random.uniform(2.0, 4.0)
             time.sleep(espera)
             log(f"Navegando con Playwright a: {url}")
             
-            # Usamos 'domcontentloaded' para evitar bloqueos largos por recursos de terceros lentos
-            page.goto(url, timeout=45000, wait_until="domcontentloaded")
+            page.goto(url, timeout=60000, wait_until="domcontentloaded")
             
-            # Pequeña pausa para permitir que scripts dinámicos rendericen precios si es necesario
-            page.wait_for_timeout(2000)
-            
+            # Esperar a que aparezcan los resultados de búsqueda o el contenedor principal de Amazon
+            try:
+                page.wait_for_selector("div.s-main-slot, #productTitle", timeout=10000)
+            except:
+                log("Aviso: No se detectó el selector principal de forma inmediata, continuando...")
+                
             html_content = page.content()
             browser.close()
             return html_content
