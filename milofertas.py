@@ -311,7 +311,7 @@ def obtener_producto(url, historial):
 
 def main():
     historial = set(cargar_json(HISTORIAL_FILE, []))
-    log(f"Sistema iniciado | MODO={MODO} | Historial cargado con {len(historial)} elementos.")
+    log(f"Sistema iniciado | MODO=ULTRA | Historial cargado con {len(historial)} elementos.")
 
     if not evaluar_riesgo():
         log("Límite de riesgo diario alcanzado. Finalizando ejecución.")
