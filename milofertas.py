@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import requests
 import random
 import time
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import re
 import os
 import json
+import requests
+from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 # ==================================================
 # =================== MODOS ========================
 # ==================================================
 
-# "ULTRA"  -> canales nuevos / riesgo cero
-# "SAFE"   -> crecimiento lento
-# "NORMAL" -> crecimiento estable (recomendado tras 2-3 semanas)
 MODO = "ULTRA"
 
 MODOS_CONFIG = {
@@ -51,17 +49,6 @@ PALABRAS_CLAVE = [
     "cocina", "bricolaje", "oficina"
 ]
 
-HEADERS = [
-    {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-    }
-]
-
 TAG_AFILIADO = "crt06f-21"
 HORA_INICIO = 9
 HORA_FIN = 22
@@ -79,7 +66,6 @@ CHAT_ID = "@Milofertazos"
 # ==================================================
 
 def log(msg):
-    # flush=True asegura que los prints se muestren al momento en GitHub Actions
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
 
 def horario_permitido():
@@ -134,7 +120,7 @@ def registrar_envio():
     log(f"Envío registrado. Total hoy: {envios[hoy]}")
 
 # ==================================================
-# ============== AMAZON ============================
+# ============== PLAYWRIGHT SCRAPER ================
 # ==================================================
 
 def extract_asin(url):
@@ -144,18 +130,47 @@ def extract_asin(url):
 def crear_url(asin):
     return f"https://www.amazon.es/dp/{asin}?tag={TAG_AFILIADO}"
 
-def get_html(url):
-    try:
-        espera = random.uniform(1.5, 3)
-        time.sleep(espera)
-        header_elegido = random.choice(HEADERS)
-        log(f"Realizando petición HTTP a: {url}")
-        r = requests.get(url, headers=header_elegido, timeout=20)
-        log(f"Respuesta HTTP recibida con estatus: {r.status_code}")
-        return r.text if r.status_code == 200 else None
-    except Exception as e:
-        log(f"Excepción en get_html para {url}: {e}")
-        return None
+def get_page_html(url):
+    """Obtiene el HTML completo de una URL usando Playwright en modo headless."""
+    with sync_playwright() as p:
+        # Se lanza Chromium en modo headless con argumentos optimizados para CI/CD (GitHub Actions)
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled"
+            ]
+        )
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+            locale="es-ES",
+            viewport={"width": 1920, "height": 1080}
+        )
+        page = context.new_page()
+        
+        try:
+            espera = random.uniform(1.5, 3.0)
+            time.sleep(espera)
+            log(f"Navegando con Playwright a: {url}")
+            
+            # Usamos 'domcontentloaded' para evitar bloqueos largos por recursos de terceros lentos
+            page.goto(url, timeout=45000, wait_until="domcontentloaded")
+            
+            # Pequeña pausa para permitir que scripts dinámicos rendericen precios si es necesario
+            page.wait_for_timeout(2000)
+            
+            html_content = page.content()
+            browser.close()
+            return html_content
+        except Exception as e:
+            log(f"Excepción en Playwright al cargar {url}: {e}")
+            try:
+                browser.close()
+            except:
+                pass
+            return None
 
 def parse_precio(txt):
     if not txt:
@@ -210,7 +225,7 @@ def enviar_telegram(p):
 
         if r.status_code == 200:
             registrar_envio()
-            log(f"¡Enviado con éxito a Telegram! ASIN: {p['asin']}")
+            log(f"¡Enviado con éxito à Telegram! ASIN: {p['asin']}")
         else:
             log(f"Telegram rechazó el mensaje. Código: {r.status_code}")
     except Exception as e:
@@ -227,7 +242,7 @@ def buscar_productos():
 
     for page in range(1, 4):
         url_busqueda = f"https://www.amazon.es/s?k={palabra}&page={page}"
-        html = get_html(url_busqueda)
+        html = get_page_html(url_busqueda)
         if not html:
             log(f"No se pudo obtener HTML para la página {page} de la búsqueda.")
             continue
@@ -252,7 +267,7 @@ def obtener_producto(url, historial):
         return None
 
     log(f"Analizando producto con ASIN: {asin}")
-    html = get_html(url)
+    html = get_page_html(url)
     if not html:
         log(f"No se pudo obtener el HTML del producto ASIN {asin}")
         return None
@@ -288,11 +303,6 @@ def obtener_producto(url, historial):
 def main():
     historial = set(cargar_json(HISTORIAL_FILE, []))
     log(f"Sistema iniciado | MODO={MODO} | Historial cargado con {len(historial)} elementos.")
-
-    # Validación de horario comentada temporalmente para pruebas
-    # if not horario_permitido():
-    #     log("Fuera de horario permitido. Finalizando ejecución.")
-    #     return
 
     if not evaluar_riesgo():
         log("Límite de riesgo diario alcanzado. Finalizando ejecución.")
