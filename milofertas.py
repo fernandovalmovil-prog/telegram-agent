@@ -136,7 +136,7 @@ def crear_url(asin):
     return f"https://www.amazon.es/dp/{asin}?tag={TAG_AFILIADO}"
 
 def get_page_html(url):
-    """Obtiene el HTML completo usando Playwright con bypass anti-bot avanzado."""
+    """Obtiene el HTML completo usando Playwright asegurando la carga de elementos dinámicos."""
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -151,7 +151,7 @@ def get_page_html(url):
         )
         
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             locale="es-ES",
             timezone_id="Europe/Madrid",
             viewport={"width": 1920, "height": 1080},
@@ -161,12 +161,13 @@ def get_page_html(url):
         page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
         try:
-            espera = random.uniform(3.0, 5.0)
+            espera = random.uniform(2.0, 4.0)
             time.sleep(espera)
             log(f"Navegando con Playwright a: {url}")
             
-            page.goto(url, timeout=60000, wait_until="load")
-            time.sleep(3)
+            page.goto(url, timeout=60000, wait_until="networkidle")
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight/3);")
+            time.sleep(2)
                 
             html_content = page.content()
             browser.close()
@@ -257,8 +258,8 @@ def buscar_productos():
         soup = BeautifulSoup(html, "html.parser")
         encontrados_pagina = 0
         
-        for a in soup.find_all("a", href=True):
-            href = a["href"]
+        for a in soup.select("a.a-link-normal.s-no-outline, a[href*='/dp/']"):
+            href = a.get("href", "")
             asin = extract_asin(href)
             if asin:
                 urls.add(f"https://www.amazon.es/dp/{asin}")
