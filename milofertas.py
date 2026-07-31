@@ -4,6 +4,7 @@
 import random
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import re
 import os
 import json
@@ -60,16 +61,20 @@ ENVIO_DIARIO_FILE = "envios_diarios.json"
 TELEGRAM_TOKEN = "7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4"
 CHAT_ID = "@Milofertazos"
 
+# -------------- ZONA HORARIA ----------------
+TIMEZONE = ZoneInfo("Europe/Madrid")
+
 
 # ==================================================
 # ================= UTILIDADES =====================
 # ==================================================
 
 def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
+    ahora_local = datetime.now(TIMEZONE)
+    print(f"[{ahora_local.strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
 
 def horario_permitido():
-    h = datetime.now().hour
+    h = datetime.now(TIMEZONE).hour
     permitido = HORA_INICIO <= h < HORA_FIN
     if not permitido:
         log(f"Fuera de horario permitido ({h}h). Horario activo: {HORA_INICIO}h - {HORA_FIN}h")
@@ -102,7 +107,7 @@ def guardar_json(path, data):
 
 def evaluar_riesgo():
     envios = cargar_json(ENVIO_DIARIO_FILE, {})
-    hoy = datetime.now().strftime("%Y-%m-%d")
+    hoy = datetime.now(TIMEZONE).strftime("%Y-%m-%d")
     enviados_hoy = envios.get(hoy, 0)
     log(f"Envíos realizados hoy ({hoy}): {enviados_hoy}/{CFG['max_envios_dia']}")
 
@@ -114,7 +119,7 @@ def evaluar_riesgo():
 
 def registrar_envio():
     envios = cargar_json(ENVIO_DIARIO_FILE, {})
-    hoy = datetime.now().strftime("%Y-%m-%d")
+    hoy = datetime.now(TIMEZONE).strftime("%Y-%m-%d")
     envios[hoy] = envios.get(hoy, 0) + 1
     guardar_json(ENVIO_DIARIO_FILE, envios)
     log(f"Envío registrado. Total hoy: {envios[hoy]}")
