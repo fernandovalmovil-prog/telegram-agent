@@ -47,7 +47,7 @@ CFG = MODOS_CONFIG[MODO]
 
 PALABRAS_CLAVE = [
     "hogar", "electronica", "deporte",
-    "cocina", "bricolaje", "oficina"
+    "cocina", "bricolaje", "oficina", "ropa", "bolsos", "bañador", "decoración"
 ]
 
 TAG_AFILIADO = "crt06f-21"
