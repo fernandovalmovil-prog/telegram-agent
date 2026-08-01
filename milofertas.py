@@ -456,7 +456,7 @@ def buscar_productos():
 
     urls = set()
 
-    for page in range(1, 3):
+    for page in range(1, 21):
         url_busqueda = construir_url_busqueda(palabra, page)
 
         html = get_page_html(url_busqueda)
