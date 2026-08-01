@@ -26,4 +26,4 @@ jobs:
 
       - name: Ejecutar script
         run: |
-          python agente_promos.py
+          python milofertas.py.py
