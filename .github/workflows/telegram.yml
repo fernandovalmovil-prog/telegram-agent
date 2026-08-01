@@ -26,4 +26,4 @@ jobs:
 
       - name: Ejecutar script
         run: |
-          python milofertas.py.py
+          python milofertas.py
