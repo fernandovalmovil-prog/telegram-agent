@@ -68,6 +68,8 @@ HORA_FIN = 24
 
 HISTORIAL_FILE = "enviados_historial.json"
 ENVIO_DIARIO_FILE = "envios_diarios.json"
+DEBUG_HTML = True
+DEBUG_DIR = "debug_html"
 
 # ---------------- TELEGRAM ----------------
 # Sustituye este valor por tu token real si quieres dejarlo fijo en el script.
@@ -123,6 +125,59 @@ def guardar_json(path, data):
         log(f"JSON guardado correctamente en {path}")
     except Exception as e:
         log(f"Error al guardar JSON en {path}: {e}")
+
+def asegurar_debug_dir():
+    if DEBUG_HTML and not os.path.exists(DEBUG_DIR):
+        os.makedirs(DEBUG_DIR, exist_ok=True)
+
+
+def guardar_debug_html(nombre, html):
+    if not DEBUG_HTML or not html:
+        return
+
+    try:
+        asegurar_debug_dir()
+        path = os.path.join(DEBUG_DIR, nombre)
+
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html)
+
+        log(f"DEBUG: HTML guardado en {path}")
+    except Exception as e:
+        log(f"DEBUG: No se pudo guardar HTML {nombre}: {e}")
+
+
+def diagnosticar_html(html, contexto=""):
+    if not html:
+        log(f"DEBUG {contexto}: HTML vacío o None")
+        return
+
+    html_lower = html.lower()
+
+    log(f"DEBUG {contexto}: tamaño HTML = {len(html)} caracteres")
+
+    checks = {
+        "contiene /dp/": "/dp/" in html,
+        "contiene captcha": "captcha" in html_lower,
+        "contiene robot": "robot" in html_lower,
+        "contiene automated access": "automated access" in html_lower,
+        "contiene productTitle": "producttitle" in html_lower,
+        "contiene a-price": "a-price" in html_lower,
+        "contiene offerDisplay": "offerdisplay" in html_lower,
+        "contiene no results": "no results" in html_lower or "no hay resultados" in html_lower,
+        "contiene s-result-item": "s-result-item" in html_lower,
+    }
+
+    for nombre, valor in checks.items():
+        log(f"DEBUG {contexto}: {nombre} = {valor}")
+
+    preview = html[:500].replace("\n", " ").replace("\r", " ")
+    log(f"DEBUG {contexto}: primeros 500 chars = {preview}")
+
+
+
+
+
 
 
 # ==================================================
@@ -459,23 +514,47 @@ def buscar_productos():
     for page in range(1, 21):
         url_busqueda = construir_url_busqueda(palabra, page)
 
-        html = get_page_html(url_busqueda)
+html = get_page_html(url_busqueda)
 
-        if not html:
-            log(f"No se pudo obtener HTML para la página {page} de la búsqueda.")
-            continue
+if not html:
+    log(f"No se pudo obtener HTML para la página {page} de la búsqueda.")
+    continue
+
+diagnosticar_html(html, contexto=f"busqueda_pagina_{page}")
+guardar_debug_html(f"busqueda_{palabra}_pagina_{page}.html", html)
+
 
         soup = BeautifulSoup(html, "html.parser")
         encontrados_pagina = 0
 
-        for a in soup.select("a.a-link-normal.s-no-outline, a[href*='/dp/']"):
-            href = a.get("href", "")
+total_dp_links = len(soup.select("a[href*='/dp/']"))
+total_result_items = len(soup.select("[data-component-type='s-search-result']"))
+total_s_no_outline = len(soup.select("a.a-link-normal.s-no-outline"))
 
-            asin = extract_asin(href)
+log(f"DEBUG página {page}: enlaces con /dp/ = {total_dp_links}")
+log(f"DEBUG página {page}: items s-search-result = {total_result_items}")
+log(f"DEBUG página {page}: enlaces s-no-outline = {total_s_no_outline}")
+asins_p*gina = set()
 
-            if asin:
-                urls.add(f"https://www.amazon.es/dp/{asin}")
-                encontrados_pagina += 1
+for a in soup.select*"a[href*='/dp/'], a[href*='/gp/pro*uct/']"):
+    href = a.get("href",*"")
+
+    asin = extract_asin(href)*
+    if asin:
+        asins_pagina*add(asin)
+
+for asin in asins_pagin*:
+    urls.add(f"https://www.amazo*.es/dp/{asin}")
+
+encontrados_pagin* = len(asins_pagina)
+
+if encontrad*s_pagina == 0:
+    log(f"DEBUG pág*na {page}: No se extrajo ningún AS*N.")
+else:
+    muestra_asins = lis*(asins_pagina)[:10]
+    log(f"DEBU* página {page}: primeros ASIN enco*trados: {muestra_asins}")
+
+    
 
         log(f"Página {page}: encontrados {encontrados_pagina} enlaces de productos.")
 
@@ -499,11 +578,14 @@ def obtener_producto(url, historial):
 
     log(f"Analizando producto con ASIN: {asin}")
 
-    html = get_page_html(url)
+html = get_pag*_html(url)
 
-    if not html:
-        log(f"No se pudo obtener el HTML del producto ASIN {asin}")
-        return None
+if not html:
+    log(f*No se pudo obtener el HTML del pro*ucto ASIN {asin}")
+    return None*
+diagnosticar_html(html, contexto=*"producto_{asin}")
+guardar_debug_h*ml(f"producto_{asin}.html", html)
+*
 
     soup = BeautifulSoup(html, "html.parser")
 
