@@ -378,18 +378,15 @@ def extraer_precios(soup):
 
 def generar_mensaje(p):
     textos = [
-        (
-            f"{p['titulo']}\n\n"
+        (   f"{p['titulo']}\n\n"
             f"Precio actual: {p['precio']} €\n"
             f"Más información:\n{p['url']}"
         ),
-        (
-            f"{p['titulo']}\n\n"
+        (   f"{p['titulo']}\n\n"
             f"Coste: {p['precio']} €\n"
             f"Enlace:\n{p['url']}"
         ),
-        (
-            f"{p['titulo']}\n\n"
+        (   f"{p['titulo']}\n\n"
             f"Disponible en Amazon:\n{p['url']}"
         )
     ]
