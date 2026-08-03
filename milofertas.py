@@ -77,7 +77,7 @@ DEBUG_DIR = "debug_html"
 # En GitHub Actions usa Secrets:
 # TELEGRAM_TOKEN
 # CHAT_ID
-TELEGRAM_TOKEN = os.getenv("7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4")
+TELEGRAM_TOKEN = "7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4"
 CHAT_ID = os.getenv("CHAT_ID", "@Milofertazos")
 
 TIMEZONE = ZoneInfo("Europe/Madrid")
