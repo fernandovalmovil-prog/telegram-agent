@@ -377,15 +377,28 @@ def extraer_precios(soup):
 # ==================================================
 
 def generar_mensaje(p):
-    textos = [(   f"{p['titulo']}\n\n"
-            f"Precio actual: {p['precio']} €\n"
-            f"Más información:\n{p['url']}"
-        ),(   f"{p['titulo']}\n\n"
-            f"Coste: {p['precio']} €\n"
-            f"Enlace:\n{p['url']}"
-        ),(   f"{p['titulo']}\n\n"
-            f"Disponible en Amazon:\n{p['url']}"
-        ) ]
+    titulo = p.get("titulo", "Producto en oferta")
+    precio = p.get("precio", "No disponible")
+    url = p.get("url", "")
+
+    textos = [
+        (
+            f"{titulo}\n\n"
+            f"Precio actual: {precio} €\n"
+            f"Más información:\n{url}"
+        ),
+        (
+            f"{titulo}\n\n"
+            f"Disponible por {precio} €\n"
+            f"Ver producto:\n{url}"
+        ),
+        (
+            f"{titulo}\n\n"
+            f"Oferta actual: {precio} €\n"
+            f"Consulta los detalles:\n{url}"
+        ),
+    ]
+
     return random.choice(textos)
 
 
