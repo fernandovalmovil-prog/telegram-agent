@@ -73,7 +73,7 @@ DEBUG_DIR = "debug_html"
 
 # Telegram.
 # Recomendado: configurar estos valores como Secrets en GitHub Actions.
-TELEGRAM_TOKEN ="TELEGRAM_TOKEN", "7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4"
+TELEGRAM_TOKEN = "7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4"
 CHAT_ID = os.getenv("CHAT_ID", "@Milofertazos")
 
 TIMEZONE = ZoneInfo("Europe/Madrid")
@@ -398,7 +398,7 @@ def generar_mensaje(p):
 
 
 def telegram_config_valida():
-    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == "PEGA_AQUI_TU_TOKEN":
+    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == "7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4":
         log("ERROR: TELEGRAM_TOKEN no está configurado.")
         return False
 
