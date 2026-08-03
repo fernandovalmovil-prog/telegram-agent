@@ -73,7 +73,7 @@ DEBUG_DIR = "debug_html"
 
 # Telegram.
 # Recomendado: configurar estos valores como Secrets en GitHub Actions.
-TELEGRAM_TOKEN = "7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID", "@Milofertazos")
 
 TIMEZONE = ZoneInfo("Europe/Madrid")
