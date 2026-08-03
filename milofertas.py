@@ -9,6 +9,7 @@ import re
 import os
 import json
 import requests
+from urllib.parse import quote_plus
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
@@ -21,10 +22,10 @@ MODO = "ULTRA"
 
 MODOS_CONFIG = {
     "ULTRA": {
-        "min_intervalo": 600,      # 10 minutos
-        "max_intervalo": 600,      # 10 minutos
-        "min_descuento": 0,        # acepta cualquier producto con precio
-        "max_envios_dia": 144      # 1 envío cada 10 minutos durante 24h
+        "min_intervalo": 600,
+        "max_intervalo": 600,
+        "min_descuento": 15,
+        "max_envios_dia": 144
     },
     "SAFE": {
         "min_intervalo": 600,
@@ -68,15 +69,17 @@ HORA_FIN = 24
 
 HISTORIAL_FILE = "enviados_historial.json"
 ENVIO_DIARIO_FILE = "envios_diarios.json"
+
 DEBUG_HTML = True
 DEBUG_DIR = "debug_html"
 
-# ---------------- TELEGRAM ----------------
-# Sustituye este valor por tu token real si quieres dejarlo fijo en el script.
-TELEGRAM_TOKEN = "7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4"
-CHAT_ID = "@Milofertazos"
+# Telegram.
+# En GitHub Actions usa Secrets:
+# TELEGRAM_TOKEN
+# CHAT_ID
+TELEGRAM_TOKEN = os.getenv("7711722254:AAFAscovZ44PJpbYuJHKVgFevSNy-himSc4")
+CHAT_ID = os.getenv("CHAT_ID", "@Milofertazos")
 
-# -------------- ZONA HORARIA ----------------
 TIMEZONE = ZoneInfo("Europe/Madrid")
 
 
@@ -110,7 +113,7 @@ def cargar_json(path, default):
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            log(f"JSON cargado exitosamente desde {path}")
+            log(f"JSON cargado correctamente desde {path}")
             return data
     except Exception as e:
         log(f"Error al cargar JSON {path}: {e}. Usando valor por defecto.")
@@ -126,9 +129,14 @@ def guardar_json(path, data):
     except Exception as e:
         log(f"Error al guardar JSON en {path}: {e}")
 
+
 def asegurar_debug_dir():
     if DEBUG_HTML and not os.path.exists(DEBUG_DIR):
         os.makedirs(DEBUG_DIR, exist_ok=True)
+
+
+def limpiar_nombre_archivo(nombre):
+    return re.sub(r"[^a-zA-Z0-9_.-]", "_", nombre)
 
 
 def guardar_debug_html(nombre, html):
@@ -137,7 +145,8 @@ def guardar_debug_html(nombre, html):
 
     try:
         asegurar_debug_dir()
-        path = os.path.join(DEBUG_DIR, nombre)
+        nombre_limpio = limpiar_nombre_archivo(nombre)
+        path = os.path.join(DEBUG_DIR, nombre_limpio)
 
         with open(path, "w", encoding="utf-8") as f:
             f.write(html)
@@ -173,11 +182,6 @@ def diagnosticar_html(html, contexto=""):
 
     preview = html[:500].replace("\n", " ").replace("\r", " ")
     log(f"DEBUG {contexto}: primeros 500 chars = {preview}")
-
-
-
-
-
 
 
 # ==================================================
@@ -219,15 +223,16 @@ def extract_asin(url):
     if not url:
         return None
 
-    m = re.search(r"/dp/([A-Z0-9]{10})", url)
+    patrones = [
+        r"/dp/([A-Z0-9]{10})",
+        r"/gp/product/([A-Z0-9]{10})",
+        r"dp%2F([A-Z0-9]{10})",
+    ]
 
-    if m:
-        return m.group(1)
-
-    m = re.search(r"/gp/product/([A-Z0-9]{10})", url)
-
-    if m:
-        return m.group(1)
+    for patron in patrones:
+        m = re.search(patron, url, re.IGNORECASE)
+        if m:
+            return m.group(1).upper()
 
     return None
 
@@ -237,11 +242,6 @@ def crear_url(asin):
 
 
 def get_page_html(url):
-    """
-    Obtiene el HTML completo usando Playwright.
-    Versión corregida para evitar errores de entidades HTML.
-    """
-
     inicio = time.time()
 
     with sync_playwright() as p:
@@ -332,10 +332,6 @@ def parse_precio(txt):
 
 
 def extraer_precios(soup):
-    """
-    Extrae precio actual, precio anterior y descuento si están disponibles.
-    """
-
     selectores_precio_actual = [
         "#corePrice_feature_div .a-offscreen",
         ".priceToPay .a-offscreen",
@@ -381,6 +377,9 @@ def extraer_precios(soup):
             )
         except Exception:
             descuento = 0
+    else:
+        precio_anterior = None
+        descuento = 0
 
     return precio_actual, precio_anterior, descuento
 
@@ -390,311 +389,3 @@ def extraer_precios(soup):
 # ==================================================
 
 def generar_mensaje(p):
-    textos = [
-        (
-            f"{p['titulo']}\n\n"
-            f"Precio actual: {p['precio']} €\n"
-            f"Más información:\n{p['url']}"
-        ),
-        (
-            f"{p['titulo']}\n\n"
-            f"Coste: {p['precio']} €\n"
-            f"Enlace:\n{p['url']}"
-        ),
-        (
-            f"{p['titulo']}\n\n"
-            f"Disponible en Amazon:\n{p['url']}"
-        )
-    ]
-
-    return random.choice(textos)
-
-
-def enviar_texto_telegram(p):
-    try:
-        caption_texto = generar_mensaje(p)
-
-        r = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            data={
-                "chat_id": CHAT_ID,
-                "text": caption_texto
-            },
-            timeout=30
-        )
-
-        log(f"Respuesta de Telegram texto - Status Code: {r.status_code}")
-        log(f"Cuerpo de respuesta Telegram: {r.text}")
-
-        if r.status_code == 200:
-            registrar_envio()
-            log(f"¡Enviado con éxito a Telegram como texto! ASIN: {p['asin']}")
-            return True
-
-        log(f"Telegram rechazó el mensaje de texto. Código: {r.status_code}")
-        return False
-
-    except Exception as e:
-        log(f"Excepción crítica en enviar_texto_telegram: {e}")
-        return False
-
-
-def enviar_telegram(p):
-    try:
-        caption_texto = generar_mensaje(p)
-
-        if not p.get("imagen"):
-            log("Producto sin imagen. Enviando como texto.")
-            return enviar_texto_telegram(p)
-
-        log(
-            f"Iniciando descarga de imagen para ASIN {p['asin']} "
-            f"desde: {p['imagen']}"
-        )
-
-        img_resp = requests.get(p["imagen"], timeout=20)
-
-        if img_resp.status_code != 200:
-            log(
-                f"Error al descargar imagen. "
-                f"Código HTTP: {img_resp.status_code}. Enviando texto."
-            )
-            return enviar_texto_telegram(p)
-
-        img = img_resp.content
-
-        log(
-            f"Imagen descargada con éxito. "
-            f"Enviando mensaje a Telegram (Chat ID: {CHAT_ID})..."
-        )
-
-        r = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
-            data={
-                "chat_id": CHAT_ID,
-                "caption": caption_texto
-            },
-            files={
-                "photo": ("img.jpg", img)
-            },
-            timeout=30
-        )
-
-        log(f"Respuesta de la API de Telegram - Status Code: {r.status_code}")
-        log(f"Cuerpo de respuesta Telegram: {r.text}")
-
-        if r.status_code == 200:
-            registrar_envio()
-            log(f"¡Enviado con éxito a Telegram! ASIN: {p['asin']}")
-            return True
-
-        log(f"Telegram rechazó la imagen. Código: {r.status_code}. Enviando texto.")
-        return enviar_texto_telegram(p)
-
-    except Exception as e:
-        log(f"Excepción crítica en enviar_telegram: {e}")
-        return False
-
-
-# ==================================================
-# ============== BUSQUEDA ==========================
-# ==================================================
-
-def construir_url_busqueda(palabra, page):
-    return f"https://www.amazon.es/s?k={palabra}&page={page}"
-
-
-def buscar_productos():
-    palabra = random.choice(PALABRAS_CLAVE)
-
-    log(f"Buscando productos usando la palabra clave: '{palabra}'")
-
-    urls = set()
-
-    for page in range(1, 21):
-        url_busqueda = construir_url_busqueda(palabra, page)
-
-html = get_page_html(url_busqueda)
-
-if not html:
-    log(f"No se pudo obtener HTML para la página {page} de la búsqueda.")
-    continue
-
-diagnosticar_html(html, contexto=f"busqueda_pagina_{page}")
-guardar_debug_html(f"busqueda_{palabra}_pagina_{page}.html", html)
-
-
-        soup = BeautifulSoup(html, "html.parser")
-        encontrados_pagina = 0
-
-total_dp_links = len(soup.select("a[href*='/dp/']"))
-total_result_items = len(soup.select("[data-component-type='s-search-result']"))
-total_s_no_outline = len(soup.select("a.a-link-normal.s-no-outline"))
-
-log(f"DEBUG página {page}: enlaces con /dp/ = {total_dp_links}")
-log(f"DEBUG página {page}: items s-search-result = {total_result_items}")
-log(f"DEBUG página {page}: enlaces s-no-outline = {total_s_no_outline}")
-asins_p*gina = set()
-
-for a in soup.select*"a[href*='/dp/'], a[href*='/gp/pro*uct/']"):
-    href = a.get("href",*"")
-
-    asin = extract_asin(href)*
-    if asin:
-        asins_pagina*add(asin)
-
-for asin in asins_pagin*:
-    urls.add(f"https://www.amazo*.es/dp/{asin}")
-
-encontrados_pagin* = len(asins_pagina)
-
-if encontrad*s_pagina == 0:
-    log(f"DEBUG pág*na {page}: No se extrajo ningún AS*N.")
-else:
-    muestra_asins = lis*(asins_pagina)[:10]
-    log(f"DEBU* página {page}: primeros ASIN enco*trados: {muestra_asins}")
-
-    
-
-        log(f"Página {page}: encontrados {encontrados_pagina} enlaces de productos.")
-
-    log(f"Total de URLs únicas recolectadas en esta búsqueda: {len(urls)}")
-
-    urls_lista = list(urls)
-    random.shuffle(urls_lista)
-
-    return urls_lista
-
-
-def obtener_producto(url, historial):
-    asin = extract_asin(url)
-
-    if not asin:
-        return None
-
-    if asin in historial:
-        log(f"ASIN {asin} ya se encuentra en el historial. Saltando.")
-        return None
-
-    log(f"Analizando producto con ASIN: {asin}")
-
-html = get_pag*_html(url)
-
-if not html:
-    log(f*No se pudo obtener el HTML del pro*ucto ASIN {asin}")
-    return None*
-diagnosticar_html(html, contexto=*"producto_{asin}")
-guardar_debug_h*ml(f"producto_{asin}.html", html)
-*
-
-    soup = BeautifulSoup(html, "html.parser")
-
-    precio, precio_anterior, desc = extraer_precios(soup)
-
-    log(
-        f"ASIN {asin} -> Precio: {precio} € | "
-        f"Precio anterior: {precio_anterior} € | "
-        f"Descuento detectado: {desc}% "
-        f"(Mínimo requerido: {CFG['min_descuento']}%)"
-    )
-
-    if not precio:
-        log("Producto descartado (precio no detectado).")
-        return None
-
-    if desc < CFG["min_descuento"]:
-        log("Producto descartado (descuento inferior al mínimo).")
-        return None
-
-    titulo = (
-        soup.select_one("#productTitle")
-        or soup.select_one("h1")
-    )
-
-    imagen = (
-        soup.select_one("#landingImage")
-        or soup.select_one("#imgTagWrapperId img")
-    )
-
-    imagen_src = None
-
-    if imagen:
-        imagen_src = imagen.get("src") or imagen.get("data-old-hires")
-
-    historial.add(asin)
-    guardar_json(HISTORIAL_FILE, list(historial))
-
-    prod_data = {
-        "asin": asin,
-        "titulo": titulo.get_text(strip=True) if titulo else "Producto Amazon",
-        "precio": precio,
-        "precio_anterior": precio_anterior,
-        "descuento": desc,
-        "imagen": imagen_src,
-        "url": crear_url(asin)
-    }
-
-    log(
-        f"Producto válido encontrado: "
-        f"{prod_data['titulo'][:40]}... "
-        f"(ASIN: {asin})"
-    )
-
-    return prod_data
-
-
-# ==================================================
-# ================= MAIN ===========================
-# ==================================================
-
-def main():
-    inicio = time.time()
-
-    log("==================================================")
-    log("Sistema iniciado")
-    log(f"MODO={MODO}")
-    log(f"Configuración activa: {CFG}")
-    log("==================================================")
-
-    if not horario_permitido():
-        log("Fuera de horario permitido. Finalizando ejecución.")
-        return
-
-    historial = set(cargar_json(HISTORIAL_FILE, []))
-
-    log(f"Historial cargado con {len(historial)} elementos.")
-
-    if not evaluar_riesgo():
-        log("Límite diario alcanzado. Finalizando ejecución.")
-        return
-
-    urls = buscar_productos()
-
-    if not urls:
-        log("No se encontraron URLs de productos en este ciclo.")
-        log("Ejecución finalizada.")
-        return
-
-    enviado = False
-
-    for url in urls:
-        p = obtener_producto(url, historial)
-
-        if p:
-            enviado = enviar_telegram(p)
-
-            if enviado:
-                break
-
-    if not enviado:
-        log("No se encontró ningún producto válido para enviar en este ciclo.")
-
-    duracion = time.time() - inicio
-
-    log(f"Ejecución finalizada con éxito. Duración total: {duracion:.2f}s")
-
-
-if __name__ == "__main__":
-    main()
-
-
